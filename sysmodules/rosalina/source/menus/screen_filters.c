@@ -87,14 +87,16 @@ void applyColorSettings(color_setting_t* cs)
 
 Menu screenFiltersMenu = {
     "Screen filters menu",
-    .nbItems = 6,
+    .nbItems = 8,
     {
-        { "Disable", METHOD, .method = &screenFiltersSetDisabled },
-        { "Reduce blue light (level 1)", METHOD, .method = &screenFiltersReduceBlueLevel1 },
-        { "Reduce blue light (level 2)", METHOD, .method = &screenFiltersReduceBlueLevel2 },
-        { "Reduce blue light (level 3)", METHOD, .method = &screenFiltersReduceBlueLevel3 },
-        { "Reduce blue light (level 4)", METHOD, .method = &screenFiltersReduceBlueLevel4 },
-        { "Reduce blue light (level 5)", METHOD, .method = &screenFiltersReduceBlueLevel5 },
+        { "[6500K] Daylight", METHOD, .method = &screenFiltersSetDisabled },
+        { "[5500K] Sunlight", METHOD, .method = &screenFiltersReduceBlueLevel1 },
+		{ "[4200K] Fluorescent", METHOD, .method = &screenFiltersReduceBlueLevel2 },
+		{ "[3400K] Halogen", METHOD, .method = &screenFiltersReduceBlueLevel3 },
+		{ "[2700K] Incandescent", METHOD, .method = &screenFiltersReduceBlueLevel4 },
+		{ "[2300K] Dim Incandescent", METHOD, .method = &screenFiltersReduceBlueLevel5 },
+		{ "[1900K] Candle", METHOD, .method = &screenFiltersReduceBlueLevel6 },
+		{ "[1200K] Ember", METHOD, .method = &screenFiltersReduceBlueLevel7 },
     }
 };
 
@@ -106,31 +108,43 @@ void screenFiltersSetDisabled(void)
 
 void screenFiltersReduceBlueLevel1(void)
 {
-    screenFiltersCurrentTemperature = 4300;
+    screenFiltersCurrentTemperature = 5500;
     screenFiltersSetTemperature(screenFiltersCurrentTemperature);
 }
 
 void screenFiltersReduceBlueLevel2(void)
 {
-    screenFiltersCurrentTemperature = 3200;
+    screenFiltersCurrentTemperature = 4200;
     screenFiltersSetTemperature(screenFiltersCurrentTemperature);
 }
 
 void screenFiltersReduceBlueLevel3(void)
 {
-    screenFiltersCurrentTemperature = 2100;
+    screenFiltersCurrentTemperature = 3400;
     screenFiltersSetTemperature(screenFiltersCurrentTemperature);
 }
 
 void screenFiltersReduceBlueLevel4(void)
 {
-    screenFiltersCurrentTemperature = 1550;
+    screenFiltersCurrentTemperature = 2700;
     screenFiltersSetTemperature(screenFiltersCurrentTemperature);
 }
 
 void screenFiltersReduceBlueLevel5(void)
 {
-    screenFiltersCurrentTemperature = 1000;
+    screenFiltersCurrentTemperature = 2300;
+    screenFiltersSetTemperature(screenFiltersCurrentTemperature);
+}
+
+void screenFiltersReduceBlueLevel6(void)
+{
+    screenFiltersCurrentTemperature = 1900;
+    screenFiltersSetTemperature(screenFiltersCurrentTemperature);
+}
+
+void screenFiltersReduceBlueLevel7(void)
+{
+    screenFiltersCurrentTemperature = 1200;
     screenFiltersSetTemperature(screenFiltersCurrentTemperature);
 }
 
