@@ -38,4 +38,6 @@ void screenFiltersReduceBlueLevel2(void);
 void screenFiltersReduceBlueLevel3(void);
 void screenFiltersReduceBlueLevel4(void);
 void screenFiltersReduceBlueLevel5(void);
+void screenFiltersReduceBlueLevel6(void);
+void screenFiltersReduceBlueLevel7(void);
 void screenFiltersSetTemperature(int temperature);
