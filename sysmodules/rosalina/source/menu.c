@@ -137,6 +137,7 @@ MyThread *menuCreateThread(void)
 
 extern bool isN3DS;
 u32 menuCombo;
+void RosalinaMenu_EnablePluginLoader(void);
 
 void menuThreadMain(void)
 {
@@ -145,6 +146,7 @@ void menuThreadMain(void)
         rosalinaMenu.nbItems--;
         for(u32 i = 0; i <= rosalinaMenu.nbItems; i++)
             rosalinaMenu.items[i] = rosalinaMenu.items[i+1];
+		RosalinaMenu_EnablePluginLoader();
     }
     else
         N3DSMenu_UpdateStatus();
@@ -169,7 +171,9 @@ void menuThreadMain(void)
         }
         else
         {
-            Cheat_ApplyCheats();
+        	if (HID_PAD & 0xFFF) {
+        		Cheat_ApplyKeyCheats();
+        	}
         }
         svcSleepThread(50 * 1000 * 1000LL);
     }
