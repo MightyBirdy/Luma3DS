@@ -26,9 +26,6 @@
 
 #pragma once
 
-#include "utils.h"
-#include "kernel.h"
-#include "svc.h"
-
-Result MapProcessMemoryEx(Handle dstProcessHandle, u32 vaDst, Handle srcProcessHandle, u32 vaSrc, u32 size);
-Result MapProcessMemoryExWrapper(Handle dstProcessHandle, u32 vaDst, Handle srcProcessHandle, u32 vaSrc, u32 size);
+void    Sleep__Init(void);
+void    Sleep__HandleNotification(u32 notifId);
+bool    Sleep__Status(void);
