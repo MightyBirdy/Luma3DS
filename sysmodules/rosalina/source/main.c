@@ -32,11 +32,11 @@
 #include "errdisp.h"
 #include "hbloader.h"
 #include "utils.h"
-#include "sleep.h"
 #include "MyThread.h"
 #include "menus/process_patches.h"
 #include "menus/miscellaneous.h"
-#include "plgloader.h"
+#include "menus/screen_filters.h"
+#include "shell_open.h"
 
 // this is called before main
 bool isN3DS;
@@ -51,7 +51,6 @@ void __appInit()
 // this is called after main exits
 void __appExit()
 {
-    acExit();
     fsExit();
     fsregExit();
     srvSysExit();
@@ -112,16 +111,14 @@ int main(void)
     Result res = 0;
     Handle notificationHandle;
 
-    MyThread    *menuThread = menuCreateThread(), *errDispThread = errDispCreateThread(),
-                *hbldrThread = hbldrCreateThread(), *plgloaderThread = PluginLoader__CreateThread();
-
     if(R_FAILED(srvEnableNotification(&notificationHandle)))
         svcBreak(USERBREAK_ASSERT);
 
     if(R_FAILED(svcCreateEvent(&terminationRequestEvent, RESET_STICKY)))
         svcBreak(USERBREAK_ASSERT);
 
-    Sleep__Init();
+    MyThread *menuThread = menuCreateThread(), *errDispThread = errDispCreateThread(), *hbldrThread = hbldrCreateThread();
+    MyThread *shellOpenThread = shellOpenCreateThread();
 
     do
     {
@@ -141,15 +138,13 @@ int main(void)
             terminationRequest = true;
             svcSignalEvent(terminationRequestEvent);
         }
-
-        Sleep__HandleNotification(notifId);
     }
     while(!terminationRequest);
 
     MyThread_Join(menuThread, -1LL);
     MyThread_Join(errDispThread, -1LL);
     MyThread_Join(hbldrThread, -1LL);
-    MyThread_Join(plgloaderThread, -1LL);
+    MyThread_Join(shellOpenThread, -1LL);
 
     svcCloseHandle(notificationHandle);
     return 0;
