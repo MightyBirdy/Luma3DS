@@ -42,12 +42,13 @@
 
 Menu rosalinaMenu = {
     "Rosalina menu",
-    .nbItems = 11,
+    .nbItems = 12,
     {
         { "New 3DS menu...", MENU, .menu = &N3DSMenu },
         { "Cheats...", METHOD, .method = &RosalinaMenu_Cheats },
-        { "Process list", METHOD, .method = &RosalinaMenu_ProcessList },
+        { "Enable Nanquitas' loader", METHOD, .method = PluginLoader__MenuCallback},     
         { "Take screenshot (slow!)", METHOD, .method = &RosalinaMenu_TakeScreenshot },
+        { "Process list", METHOD, .method = &RosalinaMenu_ProcessList },
         { "Debugger options...", MENU, .menu = &debuggerMenu },
         { "System configuration...", MENU, .menu = &sysconfigMenu },
         { "Screen filters...", MENU, .menu = &screenFiltersMenu },
