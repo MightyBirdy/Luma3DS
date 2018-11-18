@@ -36,6 +36,7 @@
 #include "MyThread.h"
 #include "menus/process_patches.h"
 #include "menus/miscellaneous.h"
+#include "menus/screen_filters.h"
 #include "plgloader.h"
 
 // this is called before main
