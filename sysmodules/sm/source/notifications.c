@@ -14,7 +14,7 @@ static bool doPublishNotification(ProcessData *processData, u32 notificationId, 
     {
         for(u16 i = 0; i < processData->nbPendingNotifications; i++)
         {
-            if(processData->pendingNotifications[(processData->pendingNotificationIndex + i) % 16] == notificationId)
+            if(processData->pendingNotifications[(processData->receivedNotificationIndex + i) % 16] == notificationId)
                 return true;
         }
     }
@@ -101,7 +101,7 @@ Result ReceiveNotification(SessionData *sessionData, u32 *notificationId)
 
     if(processData == NULL || !processData->notificationEnabled || processData->nbPendingNotifications == 0)
     {
-        if(processData->nbPendingNotifications)
+        if(processData != NULL && processData->nbPendingNotifications)
             *notificationId = 0;
         return 0xD8806404;
     }

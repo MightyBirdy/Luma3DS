@@ -1,27 +1,8 @@
 /*
-*   This file is part of Luma3DS
-*   Copyright (C) 2016-2018 Aurora Wright, TuxSH
+*   This file is part of Luma3DS.
+*   Copyright (C) 2016-2019 Aurora Wright, TuxSH
 *
-*   This program is free software: you can redistribute it and/or modify
-*   it under the terms of the GNU General Public License as published by
-*   the Free Software Foundation, either version 3 of the License, or
-*   (at your option) any later version.
-*
-*   This program is distributed in the hope that it will be useful,
-*   but WITHOUT ANY WARRANTY; without even the implied warranty of
-*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-*   GNU General Public License for more details.
-*
-*   You should have received a copy of the GNU General Public License
-*   along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*
-*   Additional Terms 7.b and 7.c of GPLv3 apply to this file:
-*       * Requiring preservation of specified reasonable legal notices or
-*         author attributions in that material or in the Appropriate Legal
-*         Notices displayed by works containing it.
-*       * Prohibiting misrepresentation of the origin of that material,
-*         or requiring that modified versions of such material be marked in
-*         reasonable ways as different from the original version.
+*   SPDX-License-Identifier: (MIT OR GPL-2.0-or-later)
 */
 
 #include "gdb/remote_command.h"
@@ -127,7 +108,7 @@ GDB_DECLARE_REMOTE_COMMAND_HANDLER(SyncRequestInfo)
     if(R_FAILED(r))
         name[0] = 0;
 
-    n = sprintf(outbuf, "%s 0x%x, 0x%08x\n", name, cmdId, ctx->threadInfos[id].tls + 0x80);
+    n = sprintf(outbuf, "%s 0x%lx, 0x%08lx\n", name, cmdId, ctx->threadInfos[id].tls + 0x80);
 
 end:
     svcCloseHandle(handle);
@@ -181,9 +162,9 @@ GDB_DECLARE_REMOTE_COMMAND_HANDLER(TranslateHandle)
     svcControlService(SERVICEOP_GET_NAME, serviceBuf, handle);
     refcount = (u32)(refcountRaw - 1);
     if(serviceBuf[0] != 0)
-        n = sprintf(outbuf, "(%s *)0x%08x /* %s handle, %u %s */\n", classBuf, kernelAddr, serviceBuf, refcount, refcount == 1 ? "reference" : "references");
+        n = sprintf(outbuf, "(%s *)0x%08lx /* %s handle, %lu %s */\n", classBuf, kernelAddr, serviceBuf, refcount, refcount == 1 ? "reference" : "references");
     else
-        n = sprintf(outbuf, "(%s *)0x%08x /* %u %s */\n", classBuf, kernelAddr, refcount, refcount == 1 ? "reference" : "references");
+        n = sprintf(outbuf, "(%s *)0x%08lx /* %lu %s */\n", classBuf, kernelAddr, refcount, refcount == 1 ? "reference" : "references");
 
 end:
     svcCloseHandle(handle);
@@ -210,16 +191,16 @@ GDB_DECLARE_REMOTE_COMMAND_HANDLER(GetMmuConfig)
         s64 TTBCR, TTBR0;
         svcGetSystemInfo(&TTBCR, 0x10002, 0);
         svcGetProcessInfo(&TTBR0, process, 0x10008);
-        n = sprintf(outbuf, "TTBCR = %u\nTTBR0 = 0x%08x\nTTBR1 =", (u32)TTBCR, (u32)TTBR0);
+        n = sprintf(outbuf, "TTBCR = %lu\nTTBR0 = 0x%08lx\nTTBR1 =", (u32)TTBCR, (u32)TTBR0);
         for(u32 i = 0; i < (isN3DS ? 4 : 2); i++)
         {
             s64 TTBR1;
             svcGetSystemInfo(&TTBR1, 0x10002, 1 + i);
 
             if(i == (isN3DS ? 3 : 1))
-                n += sprintf(outbuf + n, " 0x%08x\n", (u32)TTBR1);
+                n += sprintf(outbuf + n, " 0x%08lx\n", (u32)TTBR1);
             else
-                n += sprintf(outbuf + n, " 0x%08x /", (u32)TTBR1);
+                n += sprintf(outbuf + n, " 0x%08lx /", (u32)TTBR1);
         }
         svcCloseHandle(process);
     }
@@ -294,7 +275,7 @@ GDB_DECLARE_REMOTE_COMMAND_HANDLER(GetMemRegions)
             const char *perm = FormatMemPerm(memi.perm);
             const char *state = FormatMemState(memi.state);
 
-            posInBuffer += sprintf(outbuf + posInBuffer, "%08X - %08X %s %s\n",
+            posInBuffer += sprintf(outbuf + posInBuffer, "%08lx - %08lx %s %s\n",
                 memi.base_addr, address, perm, state);
         }
     }

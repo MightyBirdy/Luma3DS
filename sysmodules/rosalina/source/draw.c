@@ -1,6 +1,6 @@
 /*
 *   This file is part of Luma3DS
-*   Copyright (C) 2016-2018 Aurora Wright, TuxSH
+*   Copyright (C) 2016-2019 Aurora Wright, TuxSH
 *
 *   This program is free software: you can redistribute it and/or modify
 *   it under the terms of the GNU General Public License as published by
@@ -75,28 +75,35 @@ void Draw_DrawCharacter(u32 posX, u32 posY, u32 color, char character)
     }
 }
 
+
 u32 Draw_DrawString(u32 posX, u32 posY, u32 color, const char *string)
 {
-    for(u32 i = 0, line_i = 0; i < ((u32) strlen(string)); i++)
-    {
-        if(string[i] == '\n')
+    for(u32 i = 0, line_i = 0; i < strlen(string); i++)
+        switch(string[i])
         {
-            posY += SPACING_Y;
-            line_i = 0;
-            continue;
-        }
-        else if(line_i >= (SCREEN_BOT_WIDTH - posX) / SPACING_X)
-        {
-            // Make sure we never get out of the screen.
-            posY += SPACING_Y;
-            line_i = 0;
-            if(string[i] == ' ')
-                continue; // Spaces at the start look weird
-        }
+            case '\n':
+                posY += SPACING_Y;
+                line_i = 0;
+                break;
 
-        Draw_DrawCharacter(posX + line_i * SPACING_X, posY, color, string[i]);
-        line_i++;
-    }
+            case '\t':
+                line_i += 2;
+                break;
+
+            default:
+                //Make sure we never get out of the screen
+                if(line_i >= ((SCREEN_BOT_WIDTH) - posX) / SPACING_X)
+                {
+                    posY += SPACING_Y;
+                    line_i = 1; //Little offset so we know the same string continues
+                    if(string[i] == ' ') break; //Spaces at the start look weird
+                }
+
+                Draw_DrawCharacter(posX + line_i * SPACING_X, posY, color, string[i]);
+
+                line_i++;
+                break;
+        }
 
     return posY;
 }
@@ -114,7 +121,7 @@ u32 Draw_DrawFormattedString(u32 posX, u32 posY, u32 color, const char *fmt, ...
 
 void Draw_FillFramebuffer(u32 value)
 {
-    memset32(FB_BOTTOM_VRAM_ADDR, value, FB_BOTTOM_SIZE);
+    memset(FB_BOTTOM_VRAM_ADDR, value, FB_BOTTOM_SIZE);
 }
 
 void Draw_ClearFramebuffer(void)

@@ -1,6 +1,6 @@
 /*
 *   This file is part of Luma3DS
-*   Copyright (C) 2016-2018 Aurora Wright, TuxSH
+*   Copyright (C) 2016-2019 Aurora Wright, TuxSH
 *
 *   This program is free software: you can redistribute it and/or modify
 *   it under the terms of the GNU General Public License as published by
@@ -27,6 +27,7 @@
 #include <3ds.h>
 #include "menus/miscellaneous.h"
 #include "input_redirection.h"
+#include "ntp.h"
 #include "memory.h"
 #include "draw.h"
 #include "hbloader.h"
@@ -34,14 +35,16 @@
 #include "utils.h" // for makeARMBranch
 #include "minisoc.h"
 #include "ifile.h"
+#include "pmdbgext.h"
 
 Menu miscellaneousMenu = {
     "Miscellaneous options menu",
-    .nbItems = 4,
+    .nbItems = 5,
     {
         { "Switch the hb. title to the current app.", METHOD, .method = &MiscellaneousMenu_SwitchBoot3dsxTargetTitle },
-        { "Change the menu combo", METHOD, .method = MiscellaneousMenu_ChangeMenuCombo },
+        { "Change the menu combo", METHOD, .method = &MiscellaneousMenu_ChangeMenuCombo },
         { "Start InputRedirection", METHOD, .method = &MiscellaneousMenu_InputRedirection },
+        { "Sync time and date via NTP", METHOD, .method = &MiscellaneousMenu_SyncTimeDate },
         { "Save settings", METHOD, .method = &MiscellaneousMenu_SaveSettings },
     }
 };
@@ -54,31 +57,13 @@ void MiscellaneousMenu_SwitchBoot3dsxTargetTitle(void)
 
     if(HBLDR_3DSX_TID == HBLDR_DEFAULT_3DSX_TID)
     {
-        u32 pidList[0x40];
-        s32 processAmount;
-
-        res = svcGetProcessList(&processAmount, pidList, 0x40);
+        u32 pid;
+        res = PMDBG_GetCurrentAppTitleIdAndPid(&titleId, &pid);
         if(R_SUCCEEDED(res))
-        {
-            for(s32 i = 0; i < processAmount && (u32)(titleId >> 32) != 0x00040010 && (u32)(titleId >> 32) != 0x00040000; i++)
-            {
-                Handle processHandle;
-                Result res = svcOpenProcess(&processHandle, pidList[i]);
-                if(R_FAILED(res))
-                    continue;
-
-                svcGetProcessInfo((s64 *)&titleId, processHandle, 0x10001);
-                svcCloseHandle(processHandle);
-            }
-        }
-
-        if(R_SUCCEEDED(res) && ((u32)(titleId >> 32) == 0x00040010 || (u32)(titleId >> 32) == 0x00040000))
         {
             HBLDR_3DSX_TID = titleId;
             miscellaneousMenu.items[0].title = "Switch the hb. title to hblauncher_loader";
         }
-        else if(R_FAILED(res))
-            sprintf(failureReason, "%08x", (u32)res);
         else
         {
             res = -1;
@@ -175,7 +160,7 @@ void MiscellaneousMenu_SaveSettings(void)
     IFile file;
     u64 total;
 
-    struct PACKED
+    struct PACKED ALIGN(4)
     {
         char magic[4];
         u16 formatVersionMajor, formatVersionMinor;
@@ -227,7 +212,7 @@ void MiscellaneousMenu_SaveSettings(void)
         if(R_SUCCEEDED(res))
             Draw_DrawString(10, 30, COLOR_WHITE, "Operation succeeded.");
         else
-            Draw_DrawFormattedString(10, 30, COLOR_WHITE, "Operation failed (0x%08x).", res);
+            Draw_DrawFormattedString(10, 30, COLOR_WHITE, "Operation failed (0x%08lx).", res);
         Draw_FlushFramebuffer();
         Draw_Unlock();
     }
@@ -252,7 +237,7 @@ void MiscellaneousMenu_InputRedirection(void)
         svcCloseHandle(inputRedirectionThreadStartedEvent);
 
         if(res != 0)
-            sprintf(buf, "Failed to stop InputRedirection (0x%08x).", (u32)res);
+            sprintf(buf, "Failed to stop InputRedirection (0x%08lx).", (u32)res);
         else
             miscellaneousMenu.items[2].title = "Start InputRedirection";
     }
@@ -308,7 +293,7 @@ void MiscellaneousMenu_InputRedirection(void)
                 }
 
                 if(res != 0)
-                    sprintf(buf, "Starting InputRedirection... failed (0x%08x).", (u32)res);
+                    sprintf(buf, "Starting InputRedirection... failed (0x%08lx).", (u32)res);
                 else
                     miscellaneousMenu.items[2].title = "Stop InputRedirection";
 
@@ -332,4 +317,88 @@ void MiscellaneousMenu_InputRedirection(void)
         Draw_Unlock();
     }
     while(!(waitInput() & BUTTON_B) && !terminationRequest);
+}
+
+void MiscellaneousMenu_SyncTimeDate(void)
+{
+    u32 posY;
+    u32 input = 0;
+
+    Result res;
+    bool cantStart = false;
+
+    bool isSocURegistered;
+
+    time_t t;
+    struct tm localt = {0};
+
+    res = srvIsServiceRegistered(&isSocURegistered, "soc:U");
+    cantStart = R_FAILED(res) || !isSocURegistered;
+
+    int utcOffset = 12;
+	int utcOffsetMinute = 0;
+    int absOffset;
+    do
+    {
+        Draw_Lock();
+        Draw_DrawString(10, 10, COLOR_TITLE, "Miscellaneous options menu");
+
+        absOffset = utcOffset - 12;
+        absOffset = absOffset < 0 ? -absOffset : absOffset;
+        posY = Draw_DrawFormattedString(10, 30, COLOR_WHITE, "Current UTC offset:  %c%02d%02d", utcOffset < 12 ? '-' : '+', absOffset, utcOffsetMinute);
+        posY = Draw_DrawFormattedString(10, posY + SPACING_Y, COLOR_WHITE, "Use DPAD Left/Right to change hour offset.\nUse DPAD Up/Down to change minute offset.\nPress A when done.") + SPACING_Y;
+
+        input = waitInput();
+
+        if(input & BUTTON_LEFT) utcOffset = (24 + utcOffset - 1) % 24; // ensure utcOffset >= 0
+        if(input & BUTTON_RIGHT) utcOffset = (utcOffset + 1) % 24;
+		if(input & BUTTON_UP) utcOffsetMinute = (utcOffsetMinute + 1) % 60;
+		if(input & BUTTON_DOWN) utcOffsetMinute = (60 + utcOffsetMinute - 1) % 60;
+        Draw_FlushFramebuffer();
+        Draw_Unlock();
+    }
+    while(!(input & (BUTTON_A | BUTTON_B)) && !terminationRequest);
+
+    if (input & BUTTON_B)
+        return;
+
+    utcOffset -= 12;
+
+    res = srvIsServiceRegistered(&isSocURegistered, "soc:U");
+    cantStart = R_FAILED(res) || !isSocURegistered;
+    res = 0;
+    if(!cantStart)
+    {
+        res = ntpGetTimeStamp(&t);
+        if(R_SUCCEEDED(res))
+        {
+            t += 3600 * utcOffset;
+			t += 60 * utcOffsetMinute;
+            gmtime_r(&t, &localt);
+            res = ntpSetTimeDate(&localt);
+        }
+    }
+
+    do
+    {
+        Draw_Lock();
+        Draw_DrawString(10, 10, COLOR_TITLE, "Miscellaneous options menu");
+
+        absOffset = utcOffset;
+        absOffset = absOffset < 0 ? -absOffset : absOffset;
+        Draw_DrawFormattedString(10, 30, COLOR_WHITE, "Current UTC offset:  %c%02d", utcOffset < 0 ? '-' : '+', absOffset);
+        if (cantStart)
+            Draw_DrawFormattedString(10, posY + 2 * SPACING_Y, COLOR_WHITE, "Can't sync time/date before the system\nhas finished loading.") + SPACING_Y;
+        else if (R_FAILED(res))
+            Draw_DrawFormattedString(10, posY + 2 * SPACING_Y, COLOR_WHITE, "Operation failed (%08lx).", (u32)res) + SPACING_Y;
+        else
+            Draw_DrawFormattedString(10, posY + 2 * SPACING_Y, COLOR_WHITE, "Timedate & RTC updated successfully.\nYou may need to reboot to see the changes.") + SPACING_Y;
+
+        input = waitInput();
+
+        Draw_FlushFramebuffer();
+        Draw_Unlock();
+    }
+    while(!(input & BUTTON_B) && !terminationRequest);
+
 }

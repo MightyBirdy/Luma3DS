@@ -1,6 +1,6 @@
 /*
 *   This file is part of Luma3DS
-*   Copyright (C) 2016-2018 Aurora Wright, TuxSH
+*   Copyright (C) 2016-2019 Aurora Wright, TuxSH
 *
 *   This program is free software: you can redistribute it and/or modify
 *   it under the terms of the GNU General Public License as published by
@@ -26,32 +26,83 @@
 
 #include <3ds.h>
 #include "memory.h"
-#include "services.h"
-#include "fsreg.h"
 #include "menu.h"
+#include "service_manager.h"
 #include "errdisp.h"
 #include "hbloader.h"
+#include "3dsx.h"
 #include "utils.h"
 #include "MyThread.h"
 #include "menus/process_patches.h"
 #include "menus/miscellaneous.h"
+#include "menus/debugger.h"
+#include "menus/screen_filters.h"
+
+#include "task_runner.h"
+
+static Result stealFsReg(void)
+{
+    Result ret = 0;
+
+    ret = svcControlService(SERVICEOP_STEAL_CLIENT_SESSION, fsRegGetSessionHandle(), "fs:REG");
+    while(ret == 0x9401BFE)
+    {
+        svcSleepThread(500 * 1000LL);
+        ret = svcControlService(SERVICEOP_STEAL_CLIENT_SESSION, fsRegGetSessionHandle(), "fs:REG");
+    }
+
+    return ret;
+}
+
+static Result fsRegSetupPermissions(void)
+{
+    u32 pid;
+    Result res;
+    FS_ProgramInfo info;
+
+    ExHeader_Arm11StorageInfo storageInfo = {
+        .fs_access_info = FSACCESS_NANDRO_RW | FSACCESS_NANDRW | FSACCESS_SDMC_RW,
+    };
+
+    info.programId = 0x0004013000006902LL; // Rosalina TID
+    info.mediaType = MEDIATYPE_NAND;
+
+    if(R_SUCCEEDED(res = svcGetProcessId(&pid, CUR_PROCESS_HANDLE)))
+        res = FSREG_Register(pid, 0xFFFF000000000000LL, &info, &storageInfo);
+
+    return res;
+}
 
 // this is called before main
 bool isN3DS;
 void __appInit()
 {
-    srvSysInit();
-    fsregInit();
+    Result res;
+    for(res = 0xD88007FA; res == (Result)0xD88007FA; svcSleepThread(500 * 1000LL))
+    {
+        res = srvInit();
+        if(R_FAILED(res) && res != (Result)0xD88007FA)
+            svcBreak(USERBREAK_PANIC);
+    }
 
-    fsSysInit();
+    if (R_FAILED(stealFsReg()) || R_FAILED(fsRegSetupPermissions()) || R_FAILED(fsInit()))
+        svcBreak(USERBREAK_PANIC);
+
+    if (R_FAILED(pmDbgInit()))
+        svcBreak(USERBREAK_PANIC);
+
+    if (R_FAILED(acInit()))
+        svcBreak(USERBREAK_PANIC);
 }
 
 // this is called after main exits
 void __appExit()
 {
+    acExit();
+    pmDbgExit();
     fsExit();
-    fsregExit();
-    srvSysExit();
+    svcCloseHandle(*fsRegGetSessionHandle());
+    srvExit();
 }
 
 
@@ -62,18 +113,15 @@ void __libc_fini_array(void);
 
 void __ctru_exit()
 {
+    __libc_fini_array();
     __appExit();
     __sync_fini();
-    __libc_fini_array();
-    for(;;) svcSleepThread(0); // kernel-loaded sysmodules except PXI are not supposed to terminate anyways
     svcExitProcess();
 }
 
 
 void initSystem()
 {
-    __libc_init_array();
-
     s64 out;
     isN3DS = svcGetSystemInfo(&out, 0x10001, 0) == 0;
 
@@ -89,6 +137,7 @@ void initSystem()
     ProcessPatchesMenu_PatchUnpatchFSDirectly();
     __sync_init();
     __appInit();
+    __libc_init_array();
 
     // ROSALINA HACKJOB BEGIN
     // NORMAL APPS SHOULD NOT DO THIS, EVER
@@ -104,44 +153,57 @@ void initSystem()
 bool terminationRequest = false;
 Handle terminationRequestEvent;
 
+static void handleTermNotification(u32 notificationId)
+{
+    (void)notificationId;
+    // Termination request
+    terminationRequest = true;
+    svcSignalEvent(terminationRequestEvent);
+}
+
+static void handleNextApplicationDebuggedByForce(u32 notificationId)
+{
+    int dummy;
+    (void)notificationId;
+    // Following call needs to be async because pm -> Loader depends on rosalina hb:ldr, handled in this very thread.
+    TaskRunner_RunTask(debuggerFetchAndSetNextApplicationDebugHandleTask, &dummy, 0);
+}
+
+static const ServiceManagerServiceEntry services[] = {
+    { "err:f",  1, ERRF_HandleCommands,  true },
+    { "hb:ldr", 2, HBLDR_HandleCommands, true },
+    { NULL },
+};
+
+static const ServiceManagerNotificationEntry notifications[] = {
+    { 0x100 , handleTermNotification                },
+    { 0x1000, handleNextApplicationDebuggedByForce  },
+    { 0x000, NULL },
+};
+
 int main(void)
 {
-    Result res = 0;
-    Handle notificationHandle;
+    static u8 ipcBuf[0x100] = {0};  // used by both err:f and hb:ldr
 
-    MyThread *menuThread = menuCreateThread(), *errDispThread = errDispCreateThread(), *hbldrThread = hbldrCreateThread();
-
-    if(R_FAILED(srvEnableNotification(&notificationHandle)))
-        svcBreak(USERBREAK_ASSERT);
+    // Set up static buffers for IPC
+    u32* bufPtrs = getThreadStaticBuffers();
+    memset(bufPtrs, 0, 16 * 2 * 4);
+    bufPtrs[0] = IPC_Desc_StaticBuffer(sizeof(ipcBuf), 0);
+    bufPtrs[1] = (u32)ipcBuf;
+    bufPtrs[2] = IPC_Desc_StaticBuffer(sizeof(ldrArgvBuf), 1);
+    bufPtrs[3] = (u32)ldrArgvBuf;
 
     if(R_FAILED(svcCreateEvent(&terminationRequestEvent, RESET_STICKY)))
         svcBreak(USERBREAK_ASSERT);
 
-    do
-    {
-        res = svcWaitSynchronization(notificationHandle, -1LL);
+    MyThread *menuThread = menuCreateThread();
+    MyThread *taskRunnerThread = taskRunnerCreateThread();
 
-        if(R_FAILED(res))
-            continue;
-
-        u32 notifId = 0;
-
-        if(R_FAILED(srvReceiveNotification(&notifId)))
-          svcBreak(USERBREAK_ASSERT);
-
-        if(notifId == 0x100)
-        {
-            // Termination request
-            terminationRequest = true;
-            svcSignalEvent(terminationRequestEvent);
-        }
-    }
-    while(!terminationRequest);
+    if (R_FAILED(ServiceManager_Run(services, notifications, NULL)))
+        svcBreak(USERBREAK_PANIC);
 
     MyThread_Join(menuThread, -1LL);
-    MyThread_Join(errDispThread, -1LL);
-    MyThread_Join(hbldrThread, -1LL);
+    MyThread_Join(taskRunnerThread, -1LL);
 
-    svcCloseHandle(notificationHandle);
     return 0;
 }
